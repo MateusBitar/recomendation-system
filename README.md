@@ -1,226 +1,210 @@
+# 📚 Sistema de Recomendação com FastAPI + SVD (Filtragem Colaborativa)
 
-# 📚 Sistema de Recomendação com FastAPI + SVD
+Este projeto implementa um **sistema completo de recomendação**, passando por:
 
-Este projeto implementa um **sistema de recomendação baseado em Filtragem Colaborativa**, utilizando o algoritmo **SVD (Singular Value Decomposition)** da biblioteca *scikit-surprise*.
-A API foi desenvolvida em **FastAPI**, possui documentação interativa (Swagger) e está completamente containerizada com **Docker**.
+1. **Treinamento de modelo** usando Filtragem Colaborativa com **SVD (Singular Value Decomposition)**
+2. **Serviço de API** construído com **FastAPI** para disponibilizar recomendações
+3. **Containerização em Docker**, garantindo ambiente reprodutível
+4. **Documentação completa** de instalação, execução e arquitetura
 
----
-
-## 🚀 Funcionalidades
-
-* Treinamento de modelo de recomendação usando **Surprise SVD**
-* Carregamento de dados do MovieLens (ratings, movies, users)
-* API REST com FastAPI para:
-
-  * Gerar recomendações para um usuário → `/recommendations/{user_id}`
-  * Verificar informações básicas do sistema → `/health`
-* Containerização completa com Docker + Docker Compose
-* Separação limpa entre:
-
-  * Código da API
-  * Código de pré-processamento
-  * Código de treinamento do modelo
-* Utilização de variáveis de ambiente para caminhos e parâmetros
+O objetivo é entregar um sistema modular, funcional e escalável, que pode ser aplicado a qualquer cenário de recomendação baseado em usuários.
 
 ---
 
-# 📁 Estrutura do Projeto
+# 📌 Decisões de Design e Arquitetura
+
+## 🎯 Escolha do modelo: Filtragem Colaborativa (SVD – Surprise)
+
+O modelo escolhido foi o **SVD (Singular Value Decomposition)** da biblioteca *scikit-surprise*.
+As decisões envolvidas:
+
+### ✔ Por que usar Filtragem Colaborativa?
+
+* Permite prever preferências **mesmo sem dados de conteúdo** (gênero, descrição, etc.)
+* Aprende padrões ocultos de comportamento entre usuários
+* Escalável para grandes bases como MovieLens
+* Requer apenas a matriz usuário–item
+
+### ✔ Por que o algoritmo **SVD**?
+
+* É o algoritmo mais usado para recomendação baseada em rating
+* Representa usuários e itens em um espaço de fatores latentes
+* Tem robustez contra sparsidade
+* Supera métodos baseados em média/knn em grande parte dos datasets
+
+### ✔ Por que usar a biblioteca **Surprise**?
+
+* Possui implementação otimizada do SVD
+* Facilita leitura de datasets como MovieLens
+* Suporta salvamento/carregamento de modelos
+* É ideal para projetos acadêmicos e protótipos
+
+### ✔ Por que salvar o modelo em `.pkl`?
+
+* Evita re-treinamento toda vez que a API sobe
+* Reduz o tempo de startup
+* Facilita deploy em ambientes com menos recursos
+
+---
+
+## 🏛 Decisões de Arquitetura
+
+### ✔ Separação de responsabilidades
+
+* `train_model.py` → Treina e salva o modelo
+* `movie_data_loader.py` → Carrega e pré-processa os dados
+* `main.py` → API FastAPI
+* `models/` e `data/` → separados para organização e versionamento
+
+### ✔ Carregamento do modelo na inicialização da API
+
+* Reduz latência nas requisições
+* Evita computações repetidas
+* Permite detectar erros antes da API ficar disponível
+
+### ✔ Uso de Docker
+
+* Surprise depende de compilação de C e versões específicas de NumPy → Docker garante compatibilidade
+* Cria ambiente 100% reproduzível
+* Permite deploy fácil em qualquer servidor
+
+### ✔ Python 3.10 slim
+
+* Compatível com Surprise
+* Leve o suficiente para ambientes cloud
+* Evita problemas com NumPy 2.0+
+
+---
+
+# 🧠 Funcionamento do Modelo de Recomendação (Explicação Técnica)
+
+### ✔ Conceito
+
+O SVD aproxima a matriz original de ratings:
 
 ```
-.
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── main.py
-├── movie_data_loader.py
-├── train_model.py
-├── data/               <-- arquivos .dat (IGNORADOS no Git)
-└── models/             <-- modelo treinado .pkl
+Usuários x Itens
 ```
 
+por três matrizes menores:
+
+```
+R ≈ P × Qᵀ
+```
+
+Onde:
+
+* **P** → matriz de fatores dos usuários
+* **Q** → matriz de fatores dos filmes
+* **R** → matriz de ratings observados
+
+### ✔ Predição
+
+A predição de um rating é feita assim:
+
+```
+rating ≈ viés_global + viés_usuario + viés_item + (P × Qᵀ)
+```
+
+Ou seja, o modelo prevê:
+
+* Quanto o usuário tende a gostar de itens no geral
+* Quanto cada item tende a ser bem avaliado
+* A interação entre fatores latentes
+
+### ✔ Recomendação
+
+A API filtra:
+
+1. Itens que o usuário **ainda não avaliou**
+2. Calcula o **rating previsto**
+3. Ordena do maior para o menor
+4. Retorna os **Top N recomendados**
+
 ---
 
-# 🧠 Modelo de Recomendação
+# 🧪 Como Rodar o Projeto (Localmente)
 
-O modelo utiliza:
-
-* **Filtragem Colaborativa** (Collaborative Filtering)
-* **SVD – Singular Value Decomposition**
-* Treinamento via Surprise:
-
-  ```python
-  from surprise import SVD, Dataset, Reader
-  ```
-* O modelo treinado é salvo como:
-
-  ```
-  models/svd_model.pkl
-  ```
-
-Fluxo geral:
-
-1. Carrega dados (ratings.dat)
-2. Processa entradas com Surprise Reader
-3. Treina o algoritmo SVD
-4. Salva o modelo para uso na API
-
----
-
-# ⚙️ Como Executar o Projeto
-
-## 🧪 1. Rodar Localmente (sem Docker)
-
-### Instale dependências
+### 1. Instalar dependências
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Inicie a API
+### 2. Iniciar API
 
 ```bash
 uvicorn main:app --reload
 ```
 
-### Acesse a documentação
+### 3. Acessar documentação
 
-➡️ [http://localhost:8000/docs](http://localhost:8000/docs)
+👉 [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-# 🐳 Executando com Docker
+# 🐳 Como Rodar com Docker
 
-## 1️⃣ Build da imagem
-
-(necessário apenas no primeiro uso ou quando o Dockerfile for alterado)
+### 1. Build
 
 ```bash
 docker compose build
 ```
 
-## 2️⃣ Subir o container
+### 2. Executar
 
 ```bash
 docker compose up
 ```
 
-A API ficará disponível em:
+### 3. API disponível em:
 
-➡️ [http://localhost:8000/docs](http://localhost:8000/docs)
-
-### 3️⃣ Rodar em background
-
-```bash
-docker compose up -d
-```
-
-### 4️⃣ Parar tudo
-
-```bash
-docker compose down
-```
+👉 [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-# 🔁 Treinar ou Re-treinar o Modelo
-
-Execute:
+# 🔁 Como Re-Treinar o Modelo
 
 ```bash
 python train_model.py
 ```
 
-O novo modelo será salvo automaticamente em:
+O novo modelo será salvo em:
 
 ```
 models/svd_model.pkl
 ```
 
-E será carregado pela API ao iniciar.
+---
+
+# 📡 Endpoints
+
+### 🔹 `/recommendations/{user_id}`
+
+Retorna recomendações personalizadas.
+
+### 🔹 `/health`
+
+Verifica status da API e carregamento do modelo.
 
 ---
 
-# 📡 Endpoints da API
+# 🌱 Possíveis Extensões Futuras
 
-## 🔹 GET `/health`
-
-Retorna status básico da API.
-Exemplo:
-
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
+* Versão híbrida (Conteúdo + CF)
+* KNN com similaridade entre usuários
+* Métricas de avaliação (RMSE, Precision@K)
+* Deploy em Kubernetes
+* Armazenar ratings em banco PostgreSQL
 
 ---
 
-## 🔹 GET `/recommendations/{user_id}`
+# 🎉 Conclusão
 
-Retorna **N recomendações personalizadas** para um usuário.
-
-### Parâmetros:
-
-* **user_id** (int)
-* **top_n** (int) → opcional, padrão = 5
-
-### Exemplo:
-
-```
-GET http://localhost:8000/recommendations/10?top_n=10
-```
-
-### Exemplo de resposta:
-
-```json
-{
-  "user_id": 10,
-  "recommendations": [
-    { "movie_id": 1196, "title": "Star Wars: Episode V", "predicted_rating": 4.83 },
-    { "movie_id": 1210, "title": "Star Wars: Episode VI", "predicted_rating": 4.77 },
-    ...
-  ]
-}
-```
-
----
-
-# 🧩 Configuração por Variáveis de Ambiente
-
-Você pode customizar caminhos usando um arquivo `.env`:
-
-```
-DATA_DIR=./data
-MODELS_DIR=./models
-MOVIE_DATA_FILENAME=movies.dat
-MODEL_FILENAME=svd_model.pkl
-```
-
-No Docker, essas variáveis já são definidas automaticamente.
-
----
-
-# 🤝 Contribuições
-
-Sinta-se à vontade para abrir issues ou PRs.
-Projetos de recomendação são facilmente extensíveis com:
-
-* Modelos híbridos (conteúdo + colaborativo)
-* Métricas avançadas (RMSE, MAE, MAP@K)
-* Filtros contextuais (gênero, ano, popularidade)
-* Banco de dados para armazenar avaliações
-
----
-
-# 🏁 Conclusão
-
-Este projeto demonstra a construção completa de um sistema de recomendação:
+Este projeto apresenta um ciclo completo de construção de sistemas de recomendação:
 
 * Treinamento
-* Deploy
-* API
-* Containerização
-
-É um excelente ponto de partida para sistemas mais avançados, aplicações reais e uso em produção.
-
+* Persistência do modelo
+* API REST
+* Deploy com Docker
+* Documentação completa
